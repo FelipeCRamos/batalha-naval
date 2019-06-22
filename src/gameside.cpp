@@ -1,5 +1,6 @@
 #include "gameside.h"
-#include "debug.h"
+
+#define COLORS true
 
 Gameside::Gameside(uint dimension) {
     // initialize dimension 
@@ -20,7 +21,6 @@ Gameside::Gameside(uint dimension) {
             enemyField[line][col] = Type::Field::hidden;
         }
     }
-    dmsg("Allocated gameside");
 }
 
 Gameside::~Gameside() {
@@ -29,7 +29,6 @@ Gameside::~Gameside() {
     }
 
     delete[] this->field;
-    dmsg("Deallocated gameside");
 }
 
 std::string Gameside::getEnemyField() {
@@ -51,19 +50,31 @@ std::string Gameside::getField(Type::Field **canvas) {
         for(int col = 0; col < this->m_dim; col++) {
             switch(canvas[line][col]) {
                 case Type::Field::boat:
-                    buf << "\e[32m#\e[0m "; // green #
+                    if(COLORS)
+                        buf << "\e[32m#\e[0m "; // green #
+                    else
+                        buf << "# ";
                     break;
 
                 case Type::Field::hidden:
-                    buf << "\e[2m-\e[0m ";  // hidden -
+                    if(COLORS)
+                        buf << "\e[2m-\e[0m ";  // hidden -
+                    else
+                        buf << "- ";
                     break;
 
                 case Type::Field::discovered:
-                    buf << "\e[1m+\e[0m ";  // bold +
+                    if(COLORS)
+                        buf << "\e[1m+\e[0m ";  // bold +
+                    else
+                        buf << "+ ";
                     break;
 
                 default:
-                    buf << "\e[31mER\e[0m"; // red ER
+                    if(COLORS)
+                        buf << "\e[31mER\e[0m"; // red ER
+                    else
+                        buf << "ER";
             }
         }
         buf << "\n";

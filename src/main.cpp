@@ -1,13 +1,8 @@
 #include <iostream>
-#include <initializer_list>
 #include "gameside.h"
 
 int main(int argc, char **argv){
-    // stub
-    //
     Gameside p1 = Gameside(10);
-
-    std::cout << p1.getPlayerField();
 
     p1.addOneBoat(std::list<Type::Pos> {
         Type::Pos(5,5),
@@ -20,6 +15,24 @@ int main(int argc, char **argv){
         Type::Pos(3,6),
         Type::Pos(3,7)
     });
+
+    std::string command_buf;
+    while(true) {
+        /* MAIN LOOP */
+        system("clear");
+
+        std::cout << "Previous command: '" << command_buf << "'.\n";
+        std::cout << "-----------------------------------------------\n";
+        std::cout << ">> Player Field:\n";
+        std::cout << p1.getPlayerField();
+        std::cout << "-----------------------------------------------\n";
+        std::cout << ">> Enemy Field:\n";
+        std::cout << p1.getEnemyField();
+        std::cout << "-----------------------------------------------\n";
+
+        std::cout << "> ";
+        std::cin >> command_buf;
+    }
 
     /* testing hit system */
     for(int i = 0; i < 5; i++) {

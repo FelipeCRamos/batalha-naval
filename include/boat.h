@@ -11,15 +11,16 @@
 class Boat {
     private:
         std::list<Type::Pos> boatBody;            // holds all boat body parts
-        size_t isFound = 0;                     // is marked when found
+        size_t isFound = 0;                       // is marked when found
         bool isNil = false;
 
     public:
         /* Constructors */
         Boat(std::list<Type::Pos> body);
         Boat(std::initializer_list<Type::Pos> positions);
-        Boat(){ isNil = true; };
+        Boat(){ isNil = true; };    // special null constructor
 
+        /* Tell's if the boat is a NULL Boat */
         bool isNull() { return isNil; }
 
         /* Get all the boat body */

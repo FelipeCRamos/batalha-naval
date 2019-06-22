@@ -2,6 +2,7 @@
 #define _debug_h_
 
 #define DEBUG
+#include <iostream>
 
 /* Status: DONE */
 
