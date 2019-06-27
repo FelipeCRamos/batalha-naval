@@ -25,10 +25,12 @@
 #include "parse.h"
 #include "types.h"
 #include "boat.h"
+#include "arg_parser.h"
 
 /* Definitions */
 #define S_SIZE 1024
 #define BACKLOG 5   // How many pending connections queue will hold
+#define BOT_TIME 200 // ms
 
 /*  Socket type for the connection */
 enum SocketType {
@@ -37,36 +39,46 @@ enum SocketType {
 };
 
 int main(int argc, char **argv){
-    
-    // Control variables
-    SocketType socketMode;  //!< Will hold which the program is
-    size_t PORT = 8787;
-    bool gameRunning = true;
+    // store and get arguments
+    Args args = Args(argc, argv);
 
-    // test the no. of args
-    if(argc < 2) {
-        std::cerr << "Please, run the program with -s or -c (server/client)!\n";
-        return 1;
-    }
 
-    if(std::string(argv[1]) == "-s") {
-        socketMode = SERVER; 
-    } else if (std::string(argv[1]) == "-c") {
-        socketMode = CLIENT; 
+    SocketType socketMode;                  //!< Will hold which the program is
+    // Args paramethers
+    bool isServer = args.checkArg("-s");    // -s will trigger server mode
+    bool isClient = args.checkArg("-c");    // -c will trigger client mode
+    bool isAutomatic = args.checkArg("-a"); // -a will trigger auto mode
+
+    std::cout << "Is automatic? " << isAutomatic << std::endl;
+
+    if( isServer ^ isClient ) {
+        if(isServer) socketMode = SERVER;
+        if(isClient) socketMode = CLIENT;
     } else {
-        std::cerr << "You need to specify the type client/server. (-c or -s)\n";
+        std::cerr << "You need to specify at least if the program will act as"
+            << " a server or a client (with -s or -c args).\n";
         return 1;
     }
 
+    std::string server_ip = args.getArg("--server-ip").empty() ? "127.0.0.1" : args.getArg("--server-ip");
+
+    size_t server_port;
+    try {
+        server_port = args.getArg("-p").empty() ? 8787 : std::stoi(args.getArg("-p"));
+    } catch (...) {
+        server_port = 8787;
+    }
+
+    // Control variables
+    bool gameRunning = true;
 
     /* ---------------------------------------------------------------------- */
     /* -- PLAYER THINGS ----------------------------------------------------- */
     /* ---------------------------------------------------------------------- */
     Player player = Player();
 
-    /* ADD BOATS TO THE PLAYER */
+    /* AUTO ADD RANDOM BOATS TO THE PLAYER */
     typedef std::chrono::high_resolution_clock myclock;
-
     for( int i = 1; i <= 5; i++ ) {
         int qntd = 0;
 
@@ -81,16 +93,12 @@ int main(int argc, char **argv){
         for(int j = 0; j < qntd; j++) {
             bool result = false;
             do {
-                // std::cout << "trying to add..." << i << std::endl;
+                // will try to add a boat (will fail if the boat is on top of other)
+                // until it makes
                 result = player.addRandomBoat(i);
             } while(!result);
-
-            // std::cout << "Boat with #" << i << "added!" << std::endl;
         }
     }
-
-    // std::cout << player.getPlayerField();
-    // return 0;                               // FOR TESTING
 
     if( socketMode == CLIENT ) {
         /* ------------------------------------------------------------------ */
@@ -113,16 +121,20 @@ int main(int argc, char **argv){
 
         struct sockaddr_in serverAddress;
         serverAddress.sin_family = AF_INET;
-        serverAddress.sin_port = htons(PORT);
+        serverAddress.sin_port = htons(server_port);
         serverAddress.sin_addr.s_addr = INADDR_ANY;
 
+        if(inet_pton(AF_INET, server_ip.c_str(), &serverAddress.sin_addr) <= 0) {
+            std::cerr << "Invalid IP Address!\n";
+        }
+        
         connect(socketDescriptor, (struct sockaddr *)&serverAddress, sizeof(serverAddress));
 
         // display some info about connection (debug)
-        std::cout << "Connected with: ";
-        printf("\nLocalhost: %s\n", inet_ntoa(*(struct in_addr*)hostIP->h_addr));
-        printf("Local Port: %d\n", PORT);
-        printf("Remote Host: %s\n", inet_ntoa(serverAddress.sin_addr));
+        std::cout << "Connected with:\n";
+        printf("Local Host: %s\n", inet_ntoa(*(struct in_addr*)hostIP->h_addr));
+        printf("Remote Host: %s:", inet_ntoa(serverAddress.sin_addr));
+        printf("%d\n", server_port);
 
         std::string sendBack = "";
         bool isMyTurn = false;
@@ -207,7 +219,16 @@ int main(int argc, char **argv){
 
             std::string counterResponse;
             if(sendBack.empty() && isMyTurn && atkResponse.str().empty()) {
-                counterResponse = getPlay();
+                if(isAutomatic) {
+                    auto pos = player.getRandomPlay();
+
+                    std::stringstream ss;
+                    ss << char('a' + pos.line) << pos.col;
+                    counterResponse = ss.str();
+                    std::this_thread::sleep_for(std::chrono::milliseconds(BOT_TIME));
+                } else {
+                    counterResponse = getPlay();
+                }
             } else {
                 if(!sendBack.empty()) {
                     counterResponse = sendBack;
@@ -234,7 +255,6 @@ int main(int argc, char **argv){
 
         char serverMessage[S_SIZE];
         char clientMessage[S_SIZE];
-        bool isRandom;
 
         // Creates the socket
         int socketDescriptor = socket(AF_INET, SOCK_STREAM, 0);
@@ -242,11 +262,12 @@ int main(int argc, char **argv){
         struct sockaddr_in serverAddress;
 
         serverAddress.sin_family = AF_INET;
-        serverAddress.sin_port = htons(PORT);
+        serverAddress.sin_port = htons(server_port);
         serverAddress.sin_addr.s_addr = INADDR_ANY;
 
         bind(socketDescriptor, (struct sockaddr*)&serverAddress, sizeof(serverAddress));
 
+        std::cout << "Waiting for a connection...\n";
         listen(socketDescriptor, BACKLOG);
         int clientSocketDescriptor = accept(socketDescriptor, NULL, NULL);
 
@@ -273,14 +294,13 @@ int main(int argc, char **argv){
             std::string msg;
 
             if(attackResponse.empty() && isMyTurn) {
-                if(isRandom) {
+                if(isAutomatic) {
                     auto pos = player.getRandomPlay();
 
                     std::stringstream ss;
                     ss << char('a' + pos.line) << pos.col;
-                    // std::cout << ss.str() << std::endl;
                     msg = ss.str();
-                    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+                    std::this_thread::sleep_for(std::chrono::milliseconds(BOT_TIME));
                 } else {
                     msg = getPlay();
                 }
