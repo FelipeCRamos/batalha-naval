@@ -152,8 +152,8 @@ Type::Pos Player::getRandomPlay()
 {
     int line, col;    
     bool found = false;
-
     do {
+        this->plays++;
         unsigned x = std::chrono::system_clock::now().time_since_epoch().count();
 
         unsigned y = std::chrono::system_clock::now().time_since_epoch().count();
@@ -164,15 +164,28 @@ Type::Pos Player::getRandomPlay()
 
         int r1 = z() % 10, r2 = l() % 10;
 
-        if((r1 > 0) && (r2 > 0)) {
+        if((r1 >= 0) && (r2 >= 0)) {
             // check (l,c) if wasn't played already
-            auto pos = Type::Pos(r1 % 10, r2 % 10);
+            auto pos = Type::Pos(r1, r2);
             if(std::find(history.begin(), history.end(), pos) == history.end()) {
+                history.push_back(pos);
                 found = true;
+                this->opt[pos.line][pos.col] = true;
                 return pos;
             }
         }
+
+        
     } while(!found);
+
+    // return getRandomPlayBrute();
+}
+/*}}}*/
+
+Type::Pos Player::getRandomPlayBrute()
+/*{{{*/
+{
+    // stub
 }
 /*}}}*/
 
@@ -289,9 +302,10 @@ void Player::storePosition(Type::Pos hitEnemyPos, Boat boat)
     auto res = std::find(history.begin(), history.end(), hitEnemyPos);
 
     // only give the point if he did not already matched that position
-    if(res == history.end()) {
+    if(!this->opt[hitEnemyPos.line][hitEnemyPos.col]){
         this->myScore += 1;
         history.push_back(hitEnemyPos);
+        this->opt[hitEnemyPos.line][hitEnemyPos.col] = true;
     }
 
     if(!boat.isNull()) {

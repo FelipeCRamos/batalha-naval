@@ -26,12 +26,15 @@ class Player {
         size_t myScore = 0;
         size_t enemyScore = 0;
 
+        size_t plays = 0;
+
         std::list<Boat> m_boats;    // list of active boats
 
         /* Get a field representation with a string obj */
         std::string getField(Type::Field **canvas);
         std::list<Type::Pos> history;
         std::list<Type::Pos> enemyHistory;
+        bool opt[10][10] = {false};
 
     public:
         /* Basic constructor */
@@ -45,6 +48,7 @@ class Player {
         bool addRandomBoat(size_t boat_size);
 
         Type::Pos getRandomPlay();
+        Type::Pos getRandomPlayBrute();
 
         /* Asks if a determined position has been hit */
         std::pair<bool, Boat> didHit(Type::Pos guess);

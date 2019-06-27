@@ -13,7 +13,7 @@ DATADIR = ./data
 
 # Macros
 CC = g++
-CFLAGS = -Wall -w -g -ggdb -std=c++11 -I. -I$(INCDIR) -lncurses
+CFLAGS = -std=c++11 -I. -I$(INCDIR)
 RM = -rm
 PROJ_NAME = bn
 

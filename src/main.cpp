@@ -31,6 +31,7 @@
 #define S_SIZE 1024
 #define BACKLOG 5   // How many pending connections queue will hold
 #define BOT_TIME 200 // ms
+#define DEFIP "127.0.0.1"
 
 /*  Socket type for the connection */
 enum SocketType {
@@ -42,35 +43,34 @@ int main(int argc, char **argv){
     // store and get arguments
     Args args = Args(argc, argv);
 
-
     SocketType socketMode;                  //!< Will hold which the program is
     // Args paramethers
     bool isServer = args.checkArg("-s");    // -s will trigger server mode
     bool isClient = args.checkArg("-c");    // -c will trigger client mode
     bool isAutomatic = args.checkArg("-a"); // -a will trigger auto mode
-
-    std::cout << "Is automatic? " << isAutomatic << std::endl;
+    bool gameRunning = true;
 
     if( isServer ^ isClient ) {
         if(isServer) socketMode = SERVER;
         if(isClient) socketMode = CLIENT;
     } else {
-        std::cerr << "You need to specify at least if the program will act as"
+        std::cerr 
+            << "Error: You need to specify at least if the program will act as"
             << " a server or a client (with -s or -c args).\n";
         return 1;
     }
 
-    std::string server_ip = args.getArg("--server-ip").empty() ? "127.0.0.1" : args.getArg("--server-ip");
+    std::string server_ip = 
+        args.getArg("--server-ip").empty()? DEFIP : args.getArg("--server-ip");
 
     size_t server_port;
     try {
-        server_port = args.getArg("-p").empty() ? 8787 : std::stoi(args.getArg("-p"));
+        server_port = 
+            args.getArg("-p").empty() ? 8787 : std::stoi(args.getArg("-p"));
     } catch (...) {
         server_port = 8787;
     }
 
-    // Control variables
-    bool gameRunning = true;
 
     /* ---------------------------------------------------------------------- */
     /* -- PLAYER THINGS ----------------------------------------------------- */
@@ -109,8 +109,9 @@ int main(int argc, char **argv){
         // creates the socket
         int socketDescriptor = socket(AF_INET, SOCK_STREAM, 0);
         
-        char hostname[S_SIZE], ipaddress[S_SIZE];   //!< Placeholder for host & ip
-        struct hostent *hostIP;                     //!< Placeholder for the IP Addr
+        char hostname[S_SIZE];
+        char ipaddress[S_SIZE];         //!< Placeholder for host & ip
+        struct hostent *hostIP;         //!< Placeholder for the IP Addr
 
         // If the gethostname returns a name then the program will get the IP
         if( gethostname(hostname, sizeof(hostname)) == 0 ) {
@@ -124,7 +125,7 @@ int main(int argc, char **argv){
         serverAddress.sin_port = htons(server_port);
         serverAddress.sin_addr.s_addr = INADDR_ANY;
 
-        if(inet_pton(AF_INET, server_ip.c_str(), &serverAddress.sin_addr) <= 0) {
+        if(inet_pton(AF_INET, server_ip.c_str(), &serverAddress.sin_addr)<=0) {
             std::cerr << "Invalid IP Address!\n";
         }
         
@@ -132,9 +133,10 @@ int main(int argc, char **argv){
 
         // display some info about connection (debug)
         std::cout << "Connected with:\n";
-        printf("Local Host: %s\n", inet_ntoa(*(struct in_addr*)hostIP->h_addr));
-        printf("Remote Host: %s:", inet_ntoa(serverAddress.sin_addr));
-        printf("%d\n", server_port);
+
+        printf("Local host: %s | Remote host: %s:%d",
+                inet_ntoa(*(struct in_addr*)hostIP->h_addr),
+                inet_ntoa(serverAddress.sin_addr));
 
         std::string sendBack = "";
         bool isMyTurn = false;
@@ -158,14 +160,13 @@ int main(int argc, char **argv){
 
             // recieve the data from server 
             recv(socketDescriptor, serverResponse, sizeof(serverResponse), 0);
-            // std::cout << "Other player sent: " << serverResponse << std::endl;
-            // std::cout << "---------------------------------\n";
 
+            // Placeholder for the answer to the attack
             std::stringstream atkResponse;
+
             if( strlen(serverResponse) == 2 ) {
                 // it's an attack!                 
-                // std::cout << "IDENTIFIED AN ATTACK!\n";
-                atkResponse << serverResponse;
+                atkResponse << serverResponse;  // it's easier to work with
 
                 int line, col;
                 parsePosition(serverResponse, line, col);
@@ -173,13 +174,16 @@ int main(int argc, char **argv){
 
                 std::pair<bool, Boat> resp = player.didHit(pos);
 
-                if(!resp.first) {   // attack didn't hit my boat!
+                // If the resp.first == false, the attack didn't hit any boat
+                if(!resp.first) {
                     atkResponse << "x";
                     isMyTurn = true;
-                } else if (resp.second.isNull()) {  // attack hit, but didn't sunk
+                } else if (resp.second.isNull()) {
+                    // attack did hit, but didn't sunk
                     atkResponse << "#";
                     isMyTurn = false;
-                } else { // attack sunk the boat!
+                } else { 
+                    // attack sunk the boat!
                     char atkAns;
                     switch(resp.second.getBody().size()) {
                         case 2: atkAns = 'S'; break;
@@ -192,17 +196,20 @@ int main(int argc, char **argv){
                 }
 
             } else if(strlen(serverResponse) == 3) {
-                // it's the response of an attack!
+                // it's the response to an attack!
 
                 int line, col;
                 parsePosition(serverResponse, line, col);
                 Type::Pos pos = Type::Pos(line, col);
 
+                // g3x
+                //   ^ char that defines if the attack was|snt successfull
                 switch(serverResponse[2]) {
                     case 'x':
                         isMyTurn = false;
                         player.storeError(pos);
                         break;
+
                     case '#':
                     case 'P':
                     case 'C':
@@ -213,23 +220,33 @@ int main(int argc, char **argv){
                         break;
                 }
 
-                sendBack = "?";
+                // Need's to send back anything, to keep the client/server flow
+                sendBack = "?"; 
             }
 
-
-            std::string counterResponse;
+            // Placeholder for the counter-response
+            std::string counterResponse; 
             if(sendBack.empty() && isMyTurn && atkResponse.str().empty()) {
+                // If is in our turn & there's nothing to send back, then...
                 if(isAutomatic) {
                     auto pos = player.getRandomPlay();
 
-                    std::stringstream ss;
-                    ss << char('a' + pos.line) << pos.col;
-                    counterResponse = ss.str();
+                    std::stringstream counterResponseBuf;
+
+                    // Convert's into an char-int message (like: g3)
+                    counterResponseBuf << char('a' + pos.line) << pos.col;
+
+                    // And update the counterResponse
+                    counterResponse = counterResponseBuf.str();
+
                     std::this_thread::sleep_for(std::chrono::milliseconds(BOT_TIME));
                 } else {
+
+                    // Read/validade player input, then returns a std::string 
                     counterResponse = getPlay();
                 }
             } else {
+                // But, if there's something that needs to be sent...
                 if(!sendBack.empty()) {
                     counterResponse = sendBack;
                     sendBack = "";
@@ -239,12 +256,14 @@ int main(int argc, char **argv){
                 }
             }
 
+            // Make the actual send
             send(socketDescriptor, counterResponse.c_str(), sizeof(counterResponse), 0);
         }
 
         system("clear");
         std::cout << player.showStats();
 
+        // Closes socket and terminates the program
         close(socketDescriptor);
         return 0;
 
@@ -370,7 +389,7 @@ int main(int argc, char **argv){
 
                 // atkResponse << clientMessage << "x";
                 attackResponse = atkResponse.str();
-                std::cout << "attackResponse[2] = '" << attackResponse[2] << "'\n";
+                // std::cout << "attackResponse[2] = '" << attackResponse[2] << "'\n";
                 if(attackResponse[2] == 'x') isMyTurn = true; else isMyTurn = false;
             }
         }
