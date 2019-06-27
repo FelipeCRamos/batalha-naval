@@ -147,7 +147,7 @@ bool Player::addBoat(std::list<Type::Pos> boatBody)
 }
 /*}}}*/
 
-Type::Pos Player::GetRandomPlay()
+Type::Pos Player::getRandomPlay()
 /*{{{*/
 {
     int line, col;    
@@ -155,18 +155,23 @@ Type::Pos Player::GetRandomPlay()
 
     do {
         unsigned x = std::chrono::system_clock::now().time_since_epoch().count();
+
         unsigned y = std::chrono::system_clock::now().time_since_epoch().count();
 
         std::mt19937 l(x);
-        std::mt19937 c(y);
+        std::mt19937 c(l());
+        std::mt19937 z(c() + l());
 
-        // check (l,c) if wasn't played already
-        auto pos = Type::Pos(l % 10, c % 10);
-        if(std::find(history.begin(), history.end(), pos) == history.end()) {
-            found = true;
-            return pos;
+        int r1 = z() % 10, r2 = l() % 10;
+
+        if((r1 > 0) && (r2 > 0)) {
+            // check (l,c) if wasn't played already
+            auto pos = Type::Pos(r1 % 10, r2 % 10);
+            if(std::find(history.begin(), history.end(), pos) == history.end()) {
+                found = true;
+                return pos;
+            }
         }
-
     } while(!found);
 }
 /*}}}*/

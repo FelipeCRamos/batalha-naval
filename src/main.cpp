@@ -8,6 +8,7 @@
 #include <list>
 #include <initializer_list>
 #include <utility>
+#include <thread>
 
 /* Socket related */
 #include <stdio.h>
@@ -27,7 +28,6 @@
 
 /* Definitions */
 #define S_SIZE 1024
-#define PORT 8787
 #define BACKLOG 5   // How many pending connections queue will hold
 
 /*  Socket type for the connection */
@@ -40,6 +40,7 @@ int main(int argc, char **argv){
     
     // Control variables
     SocketType socketMode;  //!< Will hold which the program is
+    size_t PORT = 8787;
     bool gameRunning = true;
 
     // test the no. of args
@@ -273,7 +274,13 @@ int main(int argc, char **argv){
 
             if(attackResponse.empty() && isMyTurn) {
                 if(isRandom) {
+                    auto pos = player.getRandomPlay();
 
+                    std::stringstream ss;
+                    ss << char('a' + pos.line) << pos.col;
+                    // std::cout << ss.str() << std::endl;
+                    msg = ss.str();
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
                 } else {
                     msg = getPlay();
                 }

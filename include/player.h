@@ -44,7 +44,7 @@ class Player {
         bool addBoat(std::list<Type::Pos> boatBody);
         bool addRandomBoat(size_t boat_size);
 
-        Type::Pos GetRandomPlay()
+        Type::Pos getRandomPlay();
 
         /* Asks if a determined position has been hit */
         std::pair<bool, Boat> didHit(Type::Pos guess);

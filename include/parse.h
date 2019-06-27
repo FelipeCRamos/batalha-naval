@@ -1,5 +1,10 @@
 #ifndef _parse_h_
 #define _parse_h_
+#include <iostream>
+#include <sstream>
+#include <algorithm>
+#include <string>
+#include <utility>
 
 void parsePosition(std::string st, int &l, int &c) {
     if(st.size() < 2) {
