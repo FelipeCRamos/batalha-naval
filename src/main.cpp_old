@@ -1,0 +1,269 @@
+#include <iostream>
+
+#include "gameside.h"
+#include "parse.h"
+#include "socket.h"
+#include "args.h"
+
+enum Mode { client, server };
+
+int main(int argc, char **argv){
+
+    // Holder for the args, in a more convenient way
+    std::list<std::string> Args = splitArgs(argc, argv);
+
+    // Define the mode that the program will run, between `client` and `server`
+    Mode programMode = Mode::server;
+    
+    if(searchArg("--client", Args)) {
+        programMode = Mode::client; // program will run as a client
+    }
+
+    // default player
+    Player p1 = Player();
+
+    /* Manually adding boats to test things out */
+    p1.addBoat(std::list<Type::Pos> {
+        Type::Pos(5,5),
+        Type::Pos(5,6),
+        Type::Pos(5,7)
+    });
+
+    p1.addBoat(std::list<Type::Pos> {
+        Type::Pos(3,5),
+        Type::Pos(3,6),
+        Type::Pos(3,7)
+    });
+
+    std::string command_buf;
+    int line, col;
+
+    /* SOCKET THINGS -------------------------------------------------------- */ 
+    /*{{{*/
+    int sock, new_socket, valread;
+    struct sockaddr_in address;
+    int opt = 1;
+    int addrlen = sizeof(address);
+    
+     // creating socket file descriptor
+    if( (sock = socket(AF_INET, SOCK_STREAM, 0)) == 0 ) {
+        perror("STATUS: Socket failed!");
+        exit(EXIT_FAILURE);
+    }
+
+    address.sin_family = AF_INET;
+    address.sin_port = htons( PORT );
+
+    if(programMode == Mode::server) {
+        // forcefully attaching socket to the port
+        if( setsockopt(sock, SOL_SOCKET, SO_REUSEPORT /*|  SO_REUSEADDR */, &opt,
+                    sizeof(opt)) ) {
+            perror("setsockopt");
+            exit(EXIT_FAILURE);
+        }
+
+        address.sin_addr.s_addr = INADDR_ANY;
+
+        // Forcefully attaching socket to the port 8080
+        if( bind(sock, (struct sockaddr *) &address, sizeof(address)) < 0 ) {
+            perror("bind failed!");
+            exit(EXIT_FAILURE);
+        }
+    } else {
+        // Convert IPv4 and IPv6 addresses from text to binary form 
+        if(inet_pton(AF_INET, LOCALIP, &address.sin_addr)<=0)  
+        { 
+            printf("\nInvalid address/ Address not supported \n"); 
+            return -1; 
+        } 
+       
+        if (connect(sock, (struct sockaddr *)&address, sizeof(address)) < 0) 
+        { 
+            printf("\nConnection Failed \n"); 
+            return -1; 
+        }
+    }
+
+    /*}}}*/
+    /* END OF SOCKET THINGS ------------------------------------------------- */ 
+
+    Player *currPlayer = &p1;
+    bool gotHit = (programMode == Mode::server) ? false : true;
+    bool isMyTurn = (programMode == Mode::server) ? false : true;
+
+    while(true) {
+        /* MAIN LOOP */
+        system("clear");
+
+        std::cout << "Previous command: '" << command_buf << "', result: ";
+        std::cout << "line: " << line << ", col: " << col << std::endl;
+        std::cout << "----------------------------------------\n";
+        std::cout << ">> \e[1;32mPlayer Field:\e[0m\n";
+        std::cout << p1.getPlayerField();
+        std::cout << "----------------------------------------\n";
+        std::cout << "> \e[1;31mEnemy field:\e[0m\n";
+        std::cout << p1.getEnemyField();
+        std::cout << "----------------------------------------\n";
+        
+        int line, col;
+        int counter = programMode == Mode::server ? 0 : -1;
+
+        if(isMyTurn) {
+            counter++;
+            std::cout <<"> ";
+            std::cin >> command_buf;
+            if(command_buf.size() > 2) { return -1; }    // invalid move parsePosition(command_buf, line, col);
+            isMyTurn = false;   // just played
+
+            /* IF ITS THE SERVER */
+            if(programMode == Mode::server) {
+                char buf[1024] = {0};
+                std::cout << "#BEGIN: server symbolic read()... ";
+                read(sock, buf, 1024);   // symbolic read(), should come ";"
+                std::cout << "'" << buf << "', ";
+                std::cout << "server actual send()... ";
+                send(new_socket, command_buf.c_str(), strlen("pwd"), 0);
+                std::cout << "done!\n";
+            } 
+
+            /* IF ITS THE CLIENT */
+            else {
+                // since it's a client, he just needs to send things
+                std::cout << "#BEGIN: client actual send()... ";
+                send(sock, command_buf.c_str(), strlen("pwd"), 0);
+                std::cout << "done!\n";
+                char buf[1024] = {0};
+
+                if(counter != 0) {
+                    std::cout << "#BEGIN: Performing client symbolic read()... ";
+                    read(sock, buf, 1024); // symbolic read()
+                    std::cout << "'" << buf << "', ";
+                    std::cout << "done!\n";
+                }
+            }
+
+            // Read the response from the other side
+            char answer[1024] = {0};
+            // std::cout << "read() will execute... ";
+            read(sock, answer, 1024);
+
+            if(programMode == Mode::server && counter != 0) {
+                std::cout << "#BEGIN: Performing server symbolic send()... ";
+                send(sock, ";", strlen(";"), 1024); // symbolic send()
+                std::cout << "done!\n";
+            }
+
+            // std::cout << "done\n";
+            printf("answer '%s', size: %i... ", answer, strlen(answer));
+
+            // process the answer
+            char status_of_attack = answer[2]; // x, #, ?, P, C, D, S
+            // char status_of_attack = 'x';
+            printf("char status_of_attack: '%c'\n", status_of_attack);
+
+            Boat b = Boat();
+            parsePosition(answer, line, col);
+            Type::Pos pos = Type::Pos(line, col);
+
+            std::cout << "Switch()... ";
+            bool error = false;
+            switch(status_of_attack) {
+                case 'x':   // errou
+                    isMyTurn = false;
+                    p1.storeError(pos);
+                    break;
+
+                case '#':   // acertou
+                case 'P':   // porta aviões (5 casas) afundado
+                case 'C':   // cruzadores (4 casas) afundado
+                case 'D':   // destroyers (3 casas) afundado
+                case 'S':   // submarinos (2 casas) afundado
+                    isMyTurn = true;
+                    p1.storePosition(pos, b);
+                    break;
+
+                case '?':   // indefinido
+                    break;
+            }
+            std::cout << "success!\n";
+
+        } else {
+            // it's not my turn, wait for an attack from the other side
+
+            char answer[1024] = {0};
+            // if it's the server side:
+            if(programMode == Mode::server) {
+                // error checkings and etc
+                if(listen(sock, 3 < 0)){perror("listen err");exit(EXIT_FAILURE);}
+                if( (new_socket = accept(sock, (struct sockaddr *) &address, 
+                                (socklen_t *) &addrlen)) < 0 ) {
+                    perror("accept err"); exit(EXIT_FAILURE);
+                }
+
+                // read info from the other side
+                std::cout << "server actual read()... ";
+                read(new_socket, answer, 1024);
+                std::cout << "done\n";
+            } 
+            
+            // if it's the client side
+            else {
+               // TODO: client code to read and populate answer 
+                std::cout << "client symb send()... ";
+                send(sock, ";", strlen(";"), 0);
+                std::cout << "client actual read()... ";
+                read(sock, answer, 1024);
+                std::cout << "done\n";
+            }
+
+            // then, make the play and give-back the result
+            int line, col;
+            parsePosition(answer, line, col);
+            Type::Pos attackPos = Type::Pos(line, col);
+
+            // check if the attack was a hit
+            std::pair<bool, Boat> atkResp = currPlayer->didHit(attackPos);
+
+            char atkAns;
+            if(atkResp.first) {
+                isMyTurn = false;
+                // was a hit, now discover what kind of hit was
+                if(atkResp.second.isNull()) {
+                    // it's a simple hit, didn't sink anything
+                    atkAns = '#';
+                } else {
+                    // discover the size of the boat and then it's char
+                    switch(atkResp.second.getBody().size()) {
+                        case 2: atkAns = 'S'; break;
+                        case 3: atkAns = 'D'; break;
+                        case 4: atkAns = 'C'; break;
+                        case 5: atkAns = 'P'; break;
+                    }
+                }
+
+            } else {
+                atkAns = 'x';
+                isMyTurn = true;
+            }
+
+            // update answer with the correct values
+            answer[2] = atkAns;
+            answer[3] = '\0';
+
+            // now, atkAns is populated with the right char
+            // we just need to send it back
+
+            int respectiveSocket = programMode == Mode::server? new_socket:sock;
+            std::cout << "send() response... ";
+            send(respectiveSocket, answer, strlen("pwd"), 0);
+
+            // TODO: POR READ() AQUI
+
+            std::cout << "done!\n";
+        }
+
+        continue;
+    }
+
+    return 0;
+}

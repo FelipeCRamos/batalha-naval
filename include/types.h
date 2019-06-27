@@ -7,8 +7,11 @@ namespace Type {
     /* field types, used on draw functions */
     enum Field {
         boat = '#',
+        boat_disc = '%',
         hidden = '-',
-        discovered = '+'
+        discovered = '+',
+        wrong = 'x'
+
     };
 
     /* Position system */
@@ -18,6 +21,16 @@ namespace Type {
 
         /* default constructor, permit syntax like: Pos(10, 20) */
         Pos_s(unsigned int line, unsigned int col) : line(line), col(col) {/* */};
+        bool operator==(Pos_s two) {
+            if( this->line == two.line && this->col == two.col ) {
+                return true;
+            }
+            return false;
+        }
+
+        bool operator!=(Pos_s two) {
+            return !(*this == two);
+        }
     } Pos;
 }
 
